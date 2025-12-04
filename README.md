@@ -2,7 +2,7 @@
 
 **The Aritra Processing Unit (tAPU)** is a custom, lightweight soft-core processor designed for the **Intel Arria II GX FPGA** family. It features a complete hardware-software co-design workflow, including a custom SystemVerilog architecture, a Python-based assembler, and a suite of pre-installed programs for complex arithmetic and logic operations.
 
-## 🏗 Hardware Architecture
+## Hardware Architecture
 
 The tAPU is a Harvard-style RISC processor built with modular SystemVerilog components. It is designed to be synthesized on **Quartus Prime** and simulated using **QuestaSim**.
 
@@ -42,7 +42,7 @@ The processor supports a focused set of instructions defined in `definitions.sv`
 
 ---
 
-## 🛠️ Software Toolchain: The Assembler
+## Software Toolchain: The Assembler
 
 Located in the `Assembler/` directory, the `assembler.py` script serves as the bridge between human-readable assembly and the hardware.
 
@@ -54,7 +54,7 @@ Located in the `Assembler/` directory, the `assembler.py` script serves as the b
 
 ---
 
-## 🚀 Simulation & Synthesis Guide
+## Simulation & Synthesis Guide
 
 ### 1. Compilation Order (Crucial)
 You **must** compile the definitions file before any other hardware files, as it defines the widths and opcodes used throughout the system.
@@ -85,7 +85,7 @@ To synthesize the design for the FPGA:
 
 ---
 
-## 💾 Example Programs
+## Example Programs
 
 The processor includes three pre-verified programs demonstrating its capabilities.
 
