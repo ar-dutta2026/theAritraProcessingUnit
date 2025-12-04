@@ -1,0 +1,225 @@
+// =====================
+// Program 2: C = OpA * OpB  (8-bit signed -> 16-bit signed)
+// Inputs:  data_mem[0] = OpA, data_mem[1] = OpB
+// Outputs: data_mem[2] = low byte, data_mem[3] = high byte
+// =====================
+
+// ---- Initialize base pointers ----
+SUB R2, R2          // R2 = 0  (base for mem[0..3])
+SUB R3, R3
+LI  R3, 4           // R3 = 4  (base for mem[4..7])
+
+// ======================================================
+// STEP 1: Compute sign = sign(OpA) XOR sign(OpB) → mem[4]
+// ======================================================
+
+// --- signA ---
+LW  R0, R2, 0       // R0 = OpA
+SUB R1, R1
+ADD R1, R0          // R1 = OpA copy
+SRL R1, R1          // shift MSB into LSB
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1          // now R1 = signA (0 or 1)
+
+// Save signA in R0
+SUB R0, R0
+ADD R0, R1          // R0 = signA
+
+// --- signB ---
+LW  R1, R2, 1       // R1 = OpB
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1          // R1 = signB
+
+// sign = signA XOR signB in R0
+XOR R0, R1          // R0 = sign
+
+// store sign at mem[4]
+SW  R0, R3, 0       // mem[4] = sign
+
+// ======================================================
+// STEP 2: absA → mem[5]
+// ======================================================
+
+LW  R0, R2, 0       // R0 = OpA
+
+SUB R1, R1
+ADD R1, R0          // R1 = OpA copy for sign test
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1          // R1 = signA
+
+BNEZ R1, A_NEG      // if signA != 0, OpA negative
+J    A_POS
+
+A_NEG:
+    SUB R1, R1      // R1 = 0
+    SUB R1, R0      // R1 = 0 - OpA = -OpA
+    J   A_DONE
+
+A_POS:
+    SUB R1, R1
+    ADD R1, R0      // R1 = OpA
+
+A_DONE:
+    SW  R1, R3, 1   // mem[5] = absA
+
+// ======================================================
+// STEP 3: absB → mem[6]
+// ======================================================
+
+LW  R0, R2, 1       // R0 = OpB
+
+SUB R1, R1
+ADD R1, R0          // R1 = OpB copy for sign test
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1
+SRL R1, R1          // R1 = signB
+
+BNEZ R1, B_NEG
+J    B_POS
+
+B_NEG:
+    SUB R1, R1      // R1 = 0
+    SUB R1, R0      // R1 = -OpB
+    J   B_DONE
+
+B_POS:
+    SUB R1, R1
+    ADD R1, R0      // R1 = OpB
+
+B_DONE:
+    SW  R1, R3, 2   // mem[6] = absB
+
+// ======================================================
+// STEP 4: Initialize product and counters
+// product = 0; outer count = absB; inner counter unused yet
+// ======================================================
+
+SUB R0, R0
+SW  R0, R2, 2       // mem[2] = 0 (prod low)
+SW  R0, R2, 3       // mem[3] = 0 (prod high)
+
+// ======================================================
+// STEP 5: Outer loop over absB (mem[6])
+// Outer: for i in [0 .. absB-1]
+// ======================================================
+
+OUTER_CHECK:
+    LW  R0, R3, 2       // R0 = absB (mem[6])
+    BNEZ R0, OUTER_BODY
+    J    AFTER_MULT     // if absB == 0, skip multiply
+
+OUTER_BODY:
+    // inner counter j = absA (mem[5]) → mem[7]
+    LW  R0, R3, 1       // R0 = absA
+    SW  R0, R3, 3       // mem[7] = absA
+
+INNER_CHECK:
+    LW  R0, R3, 3       // R0 = j (mem[7])
+    BNEZ R0, INNER_BODY
+    J    OUTER_DECR
+
+INNER_BODY:
+    // -------- increment 16-bit product (mem[3]:mem[2]) by 1 --------
+    // Load low byte
+    LW  R0, R2, 2       // R0 = prod_low
+    // R1 = 1
+    SUB R1, R1
+    LI  R1, 1
+    ADD R0, R1          // R0 = prod_low + 1
+    SW  R0, R2, 2       // store new low
+
+    // if low != 0, no carry -> skip high increment
+    BNEZ R0, SKIP_HIGH_INC
+
+    // carry: low wrapped to 0, increment high byte
+    LW  R0, R2, 3       // R0 = prod_high
+    SUB R1, R1
+    LI  R1, 1
+    ADD R0, R1          // R0 = prod_high + 1
+    SW  R0, R2, 3       // store new high
+
+SKIP_HIGH_INC:
+    // ---------------------------------------------------
+    // j = j - 1
+    LW  R0, R3, 3       // R0 = j
+    SUB R1, R1
+    LI  R1, 1
+    SUB R0, R1          // R0 = j - 1
+    SW  R0, R3, 3       // mem[7] = j-1
+
+    J    INNER_CHECK
+
+OUTER_DECR:
+    // absB = absB - 1  (mem[6])
+    LW  R0, R3, 2       // R0 = absB
+    SUB R1, R1
+    LI  R1, 1
+    SUB R0, R1          // R0 = absB - 1
+    SW  R0, R3, 2       // mem[6] = absB - 1
+
+    J    OUTER_CHECK
+
+// ======================================================
+// STEP 6: Apply sign if product should be negative
+// If mem[4] == 0 → done
+// If mem[4] != 0 → product = -product (16-bit two's comp)
+// ======================================================
+
+AFTER_MULT:
+    LW  R0, R3, 0       // R0 = sign
+    BNEZ R0, NEGATE_PRODUCT
+    J    DONE
+
+// --- NEGATE_PRODUCT: P = (~P + 1) for 16-bit P in mem[3]:mem[2] ---
+NEGATE_PRODUCT:
+    // R1 = 0xFF
+    SUB R1, R1          // R1 = 0
+    LI  R0, 1
+    SUB R1, R0          // R1 = 0 - 1 = 0xFF
+
+    // ~P_low
+    LW  R0, R2, 2       // R0 = P_low
+    XOR R0, R1          // R0 = ~P_low
+    SW  R0, R2, 2
+
+    // ~P_high
+    LW  R0, R2, 3       // R0 = P_high
+    XOR R0, R1          // R0 = ~P_high
+    SW  R0, R2, 3
+
+    // add 1 to 16-bit P using same increment routine as before
+    LW  R0, R2, 2       // R0 = P_low
+    SUB R1, R1
+    LI  R1, 1
+    ADD R0, R1          // R0 = P_low + 1
+    SW  R0, R2, 2
+
+    BNEZ R0, DONE       // if low != 0, no carry, we're done
+
+    // carry into high byte
+    LW  R0, R2, 3       // R0 = P_high
+    SUB R1, R1
+    LI  R1, 1
+    ADD R0, R1          // R0 = P_high + 1
+    SW  R0, R2, 3
+
+DONE:
+    JUMP DONE           // HALT loop for your pc==PROG_LENGTH done logic

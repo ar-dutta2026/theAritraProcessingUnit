@@ -1,0 +1,421 @@
+// ------------------------------------------------------------
+// Program 3: D = OpA * OpB * OpC (24-bit signed)
+// Inputs:
+//   mem[0] = OpA (8-bit signed)
+//   mem[1] = OpB
+//   mem[2] = OpC
+// Output (little endian):
+//   mem[3] = low byte
+//   mem[4] = mid byte
+//   mem[5] = high byte
+// ------------------------------------------------------------
+
+// ============================================================
+// 0) INITIALIZE PRODUCT (mem[3..5]) AND SIGN (mem[6]) TO ZERO
+// ============================================================
+
+    SUB R0, R0          // R0 = 0
+
+    // mem[3] = 0
+    SUB R1, R1          // R1 = 0 (base 0)
+    SW  R0, R1, 3       // mem[3] = 0
+
+    // base 4: mem[4], mem[5], mem[6]
+    SUB R1, R1
+    LI  R1, 4           // R1 = 4
+
+    SW  R0, R1, 0       // mem[4] = 0 (mid)
+    SW  R0, R1, 1       // mem[5] = 0 (high)
+    SW  R0, R1, 2       // mem[6] = 0 (sign_ABC = 0)
+
+
+// ============================================================
+// 1) COMPUTE SIGN AND ABSOLUTE VALUES OF A, B, C
+//    sign_ABC = sign(A) ^ sign(B) ^ sign(C)
+//    |A| -> mem[8], |B| -> mem[9], |C| -> mem[10]
+// ============================================================
+
+// ---------- SIGN/ABS OF A (mem[0]) ----------
+SIGN_A:
+    // load OpA into R0
+    SUB R1, R1          // base 0
+    LW  R0, R1, 0       // R0 = OpA
+
+    // copy OpA into R2 for sign test
+    SUB R2, R2
+    ADD R2, R0          // R2 = OpA
+
+    // extract signA: shift right 7 times → LSB
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2          // now R2 = signA (0 or 1)
+
+    // sign_ABC accumulator in R3 (start from 0)
+    SUB R3, R3          // R3 = 0
+    XOR R3, R2          // R3 = signA
+
+    // compute |A|
+    // if signA != 0 → negative
+    BNEZ R2, A_NEG_TAKEN
+
+A_POS:
+    // absA = OpA (in R0)
+    // store absA at mem[8]
+    SUB R1, R1
+    LI  R1, 8           // base 8
+    SW  R0, R1, 0       // mem[8] = |A|
+    JUMP SIGN_B
+
+A_NEG_TAKEN:
+    JUMP A_NEG
+
+A_NEG:
+    // absA = -OpA = 0 - OpA
+    SUB R1, R1          // R1 = 0
+    SUB R1, R0          // R1 = -OpA
+    SUB R0, R0
+    ADD R0, R1          // R0 = absA
+    SUB R1, R1
+    LI  R1, 8
+    SW  R0, R1, 0       // mem[8] = |A|
+    JUMP SIGN_B
+
+
+// ---------- SIGN/ABS OF B (mem[1]) ----------
+SIGN_B:
+    // load OpB into R0
+    SUB R1, R1          // base 0
+    LW  R0, R1, 1       // R0 = OpB
+
+    // copy for sign test
+    SUB R2, R2
+    ADD R2, R0          // R2 = OpB
+
+    // extract signB by shifting right 7 times
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2          // R2 = signB
+
+    // accumulate into sign_ABC: R3 = signA ^ signB
+    XOR R3, R2
+
+    // compute |B|
+    BNEZ R2, B_NEG_TAKEN
+
+B_POS:
+    // absB = OpB (R0)
+    SUB R1, R1
+    LI  R1, 8
+    SW  R0, R1, 1       // mem[9] = |B|
+    JUMP SIGN_C
+
+B_NEG_TAKEN:
+    JUMP B_NEG
+
+B_NEG:
+    // absB = -OpB
+    SUB R1, R1          // 0
+    SUB R1, R0          // -OpB
+    SUB R0, R0
+    ADD R0, R1          // R0 = absB
+    SUB R1, R1
+    LI  R1, 8
+    SW  R0, R1, 1       // mem[9] = |B|
+    JUMP SIGN_C
+
+
+// ---------- SIGN/ABS OF C (mem[2]) ----------
+SIGN_C:
+    // load OpC into R0
+    SUB R1, R1          // base 0
+    LW  R0, R1, 2       // R0 = OpC
+
+    // copy for sign test
+    SUB R2, R2
+    ADD R2, R0          // R2 = OpC
+
+    // extract signC by shifting right 7 times
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2
+    SRL R2, R2          // R2 = signC
+
+    // sign_ABC = signA ^ signB ^ signC
+    XOR R3, R2          // R3 = final sign_ABC
+
+    // store sign_ABC at mem[6]
+    SUB R1, R1
+    LI  R1, 4           // base 4
+    SW  R3, R1, 2       // mem[6] = sign_ABC
+
+    // compute |C|
+    BNEZ R2, C_NEG_TAKEN
+
+C_POS:
+    // absC = OpC (R0)
+    SUB R1, R1
+    LI  R1, 8
+    SW  R0, R1, 2       // mem[10] = |C|
+    JUMP SETUP_LOOPS
+
+C_NEG_TAKEN:
+    JUMP C_NEG
+
+C_NEG:
+    // absC = -OpC
+    SUB R1, R1          // 0
+    SUB R1, R0          // -OpC
+    SUB R0, R0
+    ADD R0, R1          // R0 = absC
+    SUB R1, R1
+    LI  R1, 8
+    SW  R0, R1, 2       // mem[10] = |C|
+    JUMP SETUP_LOOPS
+
+
+// ============================================================
+// 2) TRIPLE NESTED LOOPS FOR MAGNITUDE: |A| * |B| * |C|
+//    Product magnitude is held in mem[3..5] (24-bit)
+//    mem[11] = B_count
+// ============================================================
+
+SETUP_LOOPS:
+    // A_count = |A| is already stored in mem[8]
+    // B_base  = |B| stored in mem[9]
+    // C_base  = |C| stored in mem[10]
+    // We'll use mem[11] as B_count (per A iteration)
+
+A_OUTER_CHECK:
+    // load A_count (mem[8])
+    SUB R1, R1
+    LI  R1, 8           // base 8
+    LW  R0, R1, 0       // R0 = A_count
+    BNEZ R0, A_OUTER_NONZERO
+    JUMP AFTER_LOOPS    // if A_count == 0 → magnitude stays 0
+
+A_OUTER_NONZERO:
+    JUMP A_OUTER_BODY
+
+A_OUTER_BODY:
+    // Initialize B_count = B_base (mem[9]) into mem[11]
+    LW  R2, R1, 1       // R2 = B_base = |B|
+    SW  R2, R1, 3       // mem[11] = B_count
+
+B_MID_CHECK:
+    // B_count in mem[11]
+    LW  R2, R1, 3       // R2 = B_count
+    BNEZ R2, B_MID_NONZERO
+    JUMP A_DECR         // if B_count == 0 → decrement A_count
+
+B_MID_NONZERO:
+    JUMP B_MID_BODY
+
+B_MID_BODY:
+    // For each B iteration, run C loop over |C|
+
+    // C_count = C_base (mem[10]) into R3
+    LW  R3, R1, 2       // R3 = C_base = |C|
+
+C_INNER_CHECK:
+    // If C_count != 0 → do one Product++ iteration
+    BNEZ R3, C_INNER_BODY
+    // else C_count == 0 → go decrement B_count
+    JUMP B_DECR
+
+// ====================== INNER C LOOP BODY =====================
+C_INNER_BODY:
+    // --------------------------------------------------------
+    // Product++ (24-bit) in mem[3..5]
+    //   low: mem[3] (base 0, off 3)
+    //   mid: mem[4] (base 4, off 0)
+    //   high:mem[5] (base 4, off 1)
+    // --------------------------------------------------------
+
+    // Build constant 1 in R0
+    SUB R0, R0
+    LI  R0, 1           // R0 = 1
+
+    // ---------- Increment low byte: mem[3] ----------
+    SUB R1, R1          // base 0
+    LW  R2, R1, 3       // R2 = D_low (mem[3])
+    ADD R2, R0          // R2 = D_low + 1
+    SW  R2, R1, 3       // store back
+
+    // If low != 0 → no carry, go straight to C_DEC
+    BNEZ R2, LOW_NO_CARRY
+    // else low wrapped from 0xFF→0 → handle carry into mid/high
+    JUMP LOW_WRAP
+
+LOW_NO_CARRY:
+    JUMP C_DEC
+
+LOW_WRAP:
+    // ---------- Increment mid: mem[4] ----------
+    SUB R1, R1
+    LI  R1, 4           // base 4
+    LW  R2, R1, 0       // R2 = D_mid (mem[4])
+    ADD R2, R0          // R2 = D_mid + 1
+    SW  R2, R1, 0       // store mid
+
+    // If mid != 0 → done carrying, go to C_DEC
+    BNEZ R2, MID_NO_CARRY
+    // else mid wrapped, need to carry into high
+    JUMP MID_WRAP
+
+MID_NO_CARRY:
+    JUMP C_DEC
+
+MID_WRAP:
+    // ---------- Increment high: mem[5] ----------
+    LW  R2, R1, 1       // R2 = D_high (mem[5])
+    ADD R2, R0          // R2 = D_high + 1
+    SW  R2, R1, 1       // store high
+
+    // After handling carry, go decrement C_count
+    JUMP C_DEC
+
+// =============== DECREMENT C_count AND LOOP ===============
+C_DEC:
+    // decrement C_count (R3--)   (R0 is still 1)
+    SUB R3, R0          // R3 = R3 - 1
+
+    // Go back and re-check the loop condition
+    JUMP C_INNER_CHECK
+
+
+// ====================== DECREMENT B_count ======================
+B_DECR:
+    // Ensure R1 = 8 (base for A/B/C counts)
+    SUB R1, R1
+    LI  R1, 8           // base 8
+
+    // B_count in mem[11] --
+    SUB R2, R2          // 0
+    LI  R2, 1           // 1
+    LW  R0, R1, 3       // R0 = B_count (mem[11])
+    SUB R0, R2          // R0 = B_count - 1
+    SW  R0, R1, 3       // store back
+    BNEZ R0, B_DECR_NONZERO
+    // B_count == 0 → go decrement A_count
+    JUMP A_DECR
+
+B_DECR_NONZERO:
+    JUMP B_MID_CHECK
+
+
+// ====================== DECREMENT A_count ======================
+A_DECR:
+    // Ensure R1 = 8 (base for A_count)
+    SUB R1, R1
+    LI  R1, 8           // base 8
+
+    // A_count in mem[8] --
+    SUB R2, R2          // 0
+    LI  R2, 1           // 1
+    LW  R0, R1, 0       // R0 = A_count (mem[8])
+    SUB R0, R2          // R0 = A_count - 1
+    SW  R0, R1, 0       // mem[8] = new A_count
+    BNEZ R0, A_DECR_NONZERO
+    // when A_count == 0, fall through to AFTER_LOOPS
+    JUMP AFTER_LOOPS
+
+A_DECR_NONZERO:
+    JUMP A_OUTER_CHECK
+
+AFTER_LOOPS:
+
+
+// ============================================================
+// 3) APPLY SIGN (24-bit TWO'S COMPLEMENT IF sign_ABC == 1)
+// ============================================================
+
+    // Load sign_ABC from mem[6]
+    SUB R1, R1
+    LI  R1, 4           // base 4
+    LW  R0, R1, 2       // R0 = sign_ABC
+
+    // If sign == 0, skip negation (use trampoline)
+    BNEZ R0, NEGATE_D_TAKEN
+    JUMP DONE
+
+NEGATE_D_TAKEN:
+    JUMP NEGATE_D
+
+NEGATE_D:
+    // Build 0xFF in R2 (=-1) correctly using R3 as a scratch
+    SUB R2, R2          // R2 = 0
+    LI  R3, 1           // R3 = 1
+    SUB R2, R3          // R2 = 0 - 1 = 0xFF
+
+    // ----- bitwise NOT: XOR each byte with 0xFF -----
+    // low: mem[3]
+    SUB R1, R1          // base 0
+    LW  R3, R1, 3       // R3 = D_low
+    XOR R3, R2          // R3 = ~D_low
+    SW  R3, R1, 3
+
+    // mid: mem[4]
+    SUB R1, R1
+    LI  R1, 4
+    LW  R3, R1, 0       // R3 = D_mid
+    XOR R3, R2
+    SW  R3, R1, 0
+
+    // high: mem[5]
+    LW  R3, R1, 1       // R3 = D_high
+    XOR R3, R2
+    SW  R3, R1, 1
+
+    // ----- Add 1 to 24-bit value (low→mid→high) -----
+    SUB R2, R2
+    LI  R2, 1
+
+    // low++ ...
+    SUB R0, R0          // base 0
+    LW  R3, R0, 3
+    ADD R3, R2
+    SW  R3, R0, 3
+    BNEZ R3, LOW_NZ
+    JUMP LOW_ZERO
+
+LOW_NZ:
+    JUMP DONE_NEG
+
+LOW_ZERO:
+    SUB R1, R1
+    LI  R1, 4
+    LW  R3, R1, 0
+    ADD R3, R2
+    SW  R3, R1, 0
+    BNEZ R3, MID_NZ
+    JUMP MID_ZERO
+
+MID_NZ:
+    JUMP DONE_NEG
+
+MID_ZERO:
+    LW  R3, R1, 1
+    ADD R3, R2
+    SW  R3, R1, 1
+    JUMP DONE_NEG
+
+DONE_NEG:
+    JUMP DONE
+
+// ============================================================
+// 4) HALT: self-loop so pc == PROG_LENGTH can signal done
+// ============================================================
+
+DONE:
+    JUMP DONE

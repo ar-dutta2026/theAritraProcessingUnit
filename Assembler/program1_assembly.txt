@@ -1,0 +1,169 @@
+// --- INITIALIZATION ---
+SUB R0, R0          
+LI R0, 1                
+SLL R0, R0              // 2
+SLL R0, R0              // 4
+SLL R0, R0              // 8
+SLL R0, R0              // 16
+LI R3, 8
+SW R3, R0, 0            
+LI R3, 0                
+SW R3, R0, 1            
+
+// --- OUTER LOOP INIT ---
+SUB R1, R1              
+
+L_OUTER_START:
+    SUB R2, R2          
+    ADD R2, R1          
+    SUB R0, R0          
+    LI R0, 1            
+    ADD R2, R0          
+
+L_INNER_START:
+    // --- LOAD & XOR ---
+    SUB R3, R3
+    ADD R3, R1          
+    LW R3, R3, 0        
+
+    SUB R0, R0
+    ADD R0, R2          
+    LW R0, R0, 0        
+
+    XOR R3, R0          
+
+    // --- SPILL REGISTERS ---
+    SUB R0, R0          
+    LI R0, 1
+    SLL R0, R0          
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0          // R0 = 16
+    SW R1, R0, 2        
+    SW R2, R0, 3        
+
+    // --- POPCOUNT ---
+    SUB R1, R1          
+    
+    POP_LOOP:
+        BNEZ R3, POP_BODY      
+        JUMP POP_DONE   
+
+    POP_BODY:
+        SUB R0, R0      
+        LI R0, 1        
+        ADD R1, R0      
+        
+        SUB R0, R0      
+        ADD R0, R3      
+        SUB R2, R2      
+        LI R2, 1
+        SUB R0, R2      
+        AND R3, R0      
+        JUMP POP_LOOP   
+
+    POP_DONE:
+        SUB R3, R3
+        ADD R3, R1      
+
+    // --- RESTORE REGISTERS ---
+    SUB R0, R0          
+    LI R0, 1
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0          
+    LW R1, R0, 2        
+    LW R2, R0, 3        
+
+    // --- UPDATE MIN ---
+    LW R1, R0, 0        
+    SUB R1, R3          
+    SRL R1, R1
+    SRL R1, R1
+    SRL R1, R1
+    SRL R1, R1
+    SRL R1, R1
+    SRL R1, R1
+    SRL R1, R1          
+    BNEZ R1, SKIP_MIN   
+    SW R3, R0, 0        
+
+    SKIP_MIN:
+    // --- UPDATE MAX ---
+    LW R1, R0, 1        
+    SUB R0, R0          
+    ADD R0, R3          
+    SUB R0, R1          
+    SRL R0, R0
+    SRL R0, R0
+    SRL R0, R0
+    SRL R0, R0
+    SRL R0, R0
+    SRL R0, R0
+    SRL R0, R0
+    
+    // *** TRAMPOLINE FIX START ***
+    BNEZ R0, TRAMP_MAX  // If Neg, go to Trampoline
+    JUMP DO_UPDATE_MAX  // Else, go to Update
+    
+    TRAMP_MAX:
+    JUMP SKIP_MAX       // Long jump to skip
+    
+    DO_UPDATE_MAX:
+    // Reconstruct 16
+    SUB R0, R0          
+    LI R0, 1
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0          
+    SW R3, R0, 1        
+    // *** TRAMPOLINE FIX END ***
+
+    SKIP_MAX:
+    // --- INNER INCREMENT ---
+    SUB R0, R0          
+    LI R0, 1
+    ADD R2, R0          
+    
+    // Check k != 16
+    SUB R0, R0          
+    LI R0, 1
+    SLL R0, R0          
+    SLL R0, R0          
+    SLL R0, R0          
+    SLL R0, R0          
+    SUB R0, R2          
+    
+    BNEZ R0, CONT_INNER
+    JUMP INC_OUTER      
+
+    CONT_INNER:
+    JUMP L_INNER_START  
+
+INC_OUTER:
+    SUB R0, R0          
+    LI R0, 1
+    ADD R1, R0          
+    
+    // Check j != 15
+    SUB R0, R0          
+    LI R0, 1
+    SLL R0, R0          
+    SLL R0, R0
+    SLL R0, R0
+    SLL R0, R0          
+    SUB R3, R3          
+    LI R3, 1
+    SUB R0, R3          
+    SUB R0, R1          
+    
+    BNEZ R0, CONT_OUTER
+    JUMP DONE           
+
+    CONT_OUTER:
+    JUMP L_OUTER_START  
+
+DONE:
+    JUMP DONE
