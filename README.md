@@ -42,9 +42,9 @@ The processor supports a focused set of instructions defined in `definitions.sv`
 
 ---
 
-## Software Toolchain: The Assembler
+## The Assembler
 
-Located in the `Assembler/` directory, the `assembler.py` script serves as the bridge between human-readable assembly and the hardware.
+Located in the `Assembler/` directory, the `assembler.py` script serves as the bridge between human-readable assembly and the hardware machine code.
 
 * **Function:** Parses `.txt` assembly files, validates instruction syntax, and checks immediate value limits.
 * **LUT Generation:** Automatically identifies labels used in `JUMP` instructions and generates the necessary Look-Up Table entries.
