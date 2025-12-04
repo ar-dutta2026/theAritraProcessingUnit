@@ -6,9 +6,9 @@ module inst_rom (
 );
 
     // Parameter so you can swap programs easily, uncomment program you want to use and comment the others out
-    // parameter string ROM_FILE = "program1_machinecode.txt";
-    // parameter string ROM_FILE = "program2_machinecode.txt";
-    parameter string ROM_FILE = "program3_machinecode.txt";
+    // parameter ROM_FILE = "program1_machinecode.txt";
+    // parameter ROM_FILE = "program2_machinecode.txt";
+    parameter ROM_FILE = "program3_machinecode.txt";
 
     // Full 2^P_WIDTH-deep ROM (you can shrink if you like)
     logic [I_WIDTH-1:0] rom [0:(1<<P_WIDTH)-1];
