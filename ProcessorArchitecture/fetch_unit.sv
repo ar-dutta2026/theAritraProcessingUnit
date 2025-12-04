@@ -16,9 +16,9 @@ module fetch_unit (
     logic [P_WIDTH-1:0] branch_lut [0:63];
 
     // Parameter: LUT file name (Uncomment the program you want to run and comment out the others)
-    // parameter string LUT_FILE = "lut_p1.mem";
-    // parameter string LUT_FILE = "lut_p2.mem";
-    parameter string LUT_FILE = "lut_p3.mem";
+    // parameter LUT_FILE = "lut_p1.mem";
+    // parameter LUT_FILE = "lut_p2.mem";
+    parameter LUT_FILE = "lut_p3.mem";
 
 
     // Load LUT from file
